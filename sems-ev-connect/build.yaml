@@ -1,0 +1,15 @@
+# Only architectures whose Python dependencies publish musl wheels for CPython
+# 3.12 belong here. The Home Assistant base images are Alpine, so a missing
+# wheel means pip tries to compile from source and the add-on install fails
+# part-way through - on the customer's machine, during the install call.
+#
+# Checked against PyPI (Aug 2026):
+#   aarch64  aiohttp yes, pyyaml yes, websockets yes   -> supported
+#   amd64    aiohttp yes, pyyaml yes, websockets yes   -> supported
+#   armv7    aiohttp yes, pyyaml NO                    -> do not offer
+#   i386     aiohttp NO,  pyyaml NO                    -> do not offer
+# Re-check before adding an architecture. Between them these two cover every
+# current Home Assistant Green, Yellow, Pi 4/5 and Intel install.
+build_from:
+  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.20
+  amd64: ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20

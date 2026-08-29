@@ -1,0 +1,21 @@
+name: SEMS EV CONNECT
+version: "0.6.0"
+slug: sunlands_ev_bridge
+description: GoodWe HCA home control and OCPP 1.6J connectivity with guided setup
+url: https://goodwe-evcharger-ha-setup-wizard.netlify.app/
+# See build.yaml: only architectures with musl wheels for every dependency.
+arch: [aarch64, amd64]
+startup: services
+boot: auto
+init: false
+host_network: true
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Setup wizard and status page
+map:
+  - data:rw
+webui: http://[HOST]:[PORT:8099]
+# Home Assistant polls this and restarts the add-on if it stops answering,
+# so a bridge that dies overnight comes back without anyone noticing.
+watchdog: http://[HOST]:[PORT:8099]/api/status
