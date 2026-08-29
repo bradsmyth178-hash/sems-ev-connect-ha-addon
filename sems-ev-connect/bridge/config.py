@@ -6,6 +6,12 @@ from dataclasses import asdict, dataclass, field
 
 import yaml
 
+# The platform this bridge reports to. Neither value is a secret: both already
+# ship inside the public dist/connect.html. Holding them here is what lets a
+# pairing code shrink from a 208-character blob to eight characters.
+DEFAULT_CLOUD_URL = "https://eaudnyeuojzntovjsjib.supabase.co"
+DEFAULT_CLOUD_ANON_KEY = "sb_publishable_5QsAb8-IYQ5gQDm8M37mDg_HRLbw4Dy"
+
 CONFIG_PATH = os.environ.get("BRIDGE_CONFIG", "/data/bridge.yaml")
 
 
@@ -76,8 +82,8 @@ class Config:
     web_port: int = 8099
 
     # SEMS EV CONNECT cloud link (outbound-only; filled from a pairing code)
-    cloud_url: str = ""
-    cloud_anon_key: str = ""
+    cloud_url: str = DEFAULT_CLOUD_URL
+    cloud_anon_key: str = DEFAULT_CLOUD_ANON_KEY
     cloud_device_key: str = ""
     cloud_sync_seconds: int = 3
 
@@ -149,6 +155,61 @@ def load(path: str = CONFIG_PATH) -> Config:
     return cfg
 
 
+def running_as_addon() -> bool:
+    """True when this process is a Home Assistant add-on.
+
+    The Supervisor injects SUPERVISOR_TOKEN into every add-on container and
+    mounts /data/options.json. Knowing this lets the setup page say which
+    install route the customer is on instead of asking them to go and look
+    under Settings for an Add-ons entry.
+    """
+    return bool(os.environ.get("SUPERVISOR_TOKEN")) or os.path.exists("/data/options.json")
+
+
+def apply_claim_code(cfg: Config, code: str) -> bool:
+    """Redeem a short pairing code for this device's secret.
+
+    The long pairing code carried the platform URL, the publishable key and the
+    device secret in one 208-character base64 blob. Typing that on a phone, in a
+    garage, was the most error-prone moment of the whole install. The first two
+    are public and now live in this file, so a code only has to say *which
+    device* - which fits in eight characters.
+
+    Single-use and short-lived, spent server-side the moment it is redeemed.
+    Returns False without touching the config if the code is not accepted, so
+    the caller can fall back to the long form.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    code = (code or "").strip().upper()
+    if not (6 <= len(code) <= 24) or not code.replace("-", "").isalnum():
+        return False
+    url = (cfg.cloud_url or DEFAULT_CLOUD_URL).rstrip("/")
+    key = cfg.cloud_anon_key or DEFAULT_CLOUD_ANON_KEY
+    if not url.startswith("https://") or not key:
+        return False
+    req = urllib.request.Request(
+        f"{url}/rest/v1/rpc/wl_connect_claim",
+        data=json.dumps({"p_code": code}).encode(),
+        headers={"apikey": key, "Authorization": f"Bearer {key}",
+                 "Content-Type": "application/json"},
+        method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.loads(r.read() or b"null")
+    except Exception:  # noqa: BLE001 - a refused or unreachable claim is just "no"
+        return False
+    if not isinstance(data, dict):
+        return False
+    dev = str(data.get("device_key") or "")
+    if len(dev) < 16:
+        return False
+    cfg.cloud_url, cfg.cloud_anon_key, cfg.cloud_device_key = url, key, dev
+    return True
+
+
 def apply_pairing_code(cfg: Config, code: str) -> bool:
     """Fill the cloud fields from a SEMS EV CONNECT pairing code.
 
@@ -166,6 +227,17 @@ def apply_pairing_code(cfg: Config, code: str) -> bool:
         return False
     cfg.cloud_url, cfg.cloud_anon_key, cfg.cloud_device_key = url, key, dev
     return True
+
+
+def apply_pairing_input(cfg: Config, code: str) -> bool:
+    """Accept either form. Short codes are tried first because they are what we
+    hand out now; the long base64 form still works for anything already issued."""
+    code = (code or "").strip()
+    if not code:
+        return False
+    if len(code) <= 24 and apply_claim_code(cfg, code):
+        return True
+    return apply_pairing_code(cfg, code)
 
 
 def save(cfg: Config, path: str = CONFIG_PATH) -> None:
