@@ -45,7 +45,7 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name
 <label class="field">Basic auth username (optional)<input name="ocpp_basic_auth_user" autocomplete="username"></label><label class="field">Basic auth password (optional)<input name="ocpp_basic_auth_pass" type="password" autocomplete="current-password"></label></div>
 <div class="actions"><button type="button" class="secondary" onclick="testOcpp()">Test OCPP endpoint</button></div><div id="o2" class="out"></div></div>
 <div class="card"><h2><span id="behaviourNo">4</span> · Finish setup</h2><div class="grid">
-<label class="field advOnly hidden">Charger update interval (seconds)<input name="poll_seconds" value="30" type="number" min="5" max="120"></label><label class="field ocppOnly">OCPP meter interval (seconds)<input name="meter_seconds" value="30" type="number" min="5" max="3600"></label>
+<label class="field advOnly hidden">Charger update interval (seconds)<input name="poll_seconds" value="30" type="number" min="5" max="120"></label><label class="field ocppOnly hidden">OCPP meter interval (seconds)<input name="meter_seconds" value="30" type="number" min="5" max="3600"></label>
 <label class="field wide">Local control PIN <span class="opt">optional</span><input name="control_pin" type="password" minlength="4" placeholder="Leave blank and we will make one for you"><span>Protects start, stop, power and mode changes on your LAN. Never returned by the API. Leave blank when changing settings to keep the current PIN.</span></label>
 <label class="field wide hidden" id="pinConfirmRow">Confirm the control PIN<input name="control_pin_confirm" type="password" autocomplete="off" placeholder="Type the same PIN again"><span>Only needed if you chose your own above.</span></label>
 <label class="field wide">Pairing code<input name="cloud_pairing" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="The short code we gave you, e.g. K7P2-9QMX"><span>The code from your installer. It links this charger to your own page so you can watch and control it from your phone. Outbound-only — opens no ports.</span></label>
@@ -121,7 +121,7 @@ function setSerial(v){const f=$('[name=wallbox_serial]');if(f)f.value=v}
 async function saveConfig(){const d=form();
   const p1=String(d.control_pin||''),p2=String(d.control_pin_confirm||'');delete d.control_pin_confirm;
   if(p1&&p1!==p2){show('#o3',false,'The two PINs do not match. Type the same one in both boxes.');return}
-if(d.charger_connection==='sems'&&(!d.sems_username||(!d.sems_password&&!window.__cfgd)||!d.wallbox_serial)){show('#o3',false,'Enter the GoodWe account and charger serial number.');return}if(d.charger_connection==='modbus'&&!d.charger_host){show('#o3',false,'Enter the charger IP address.');return}const pl=String(d.control_pin||'').length;if(pl>0&&pl<4){show('#o3',false,'A PIN you choose needs at least 4 characters \u2014 or leave it blank and we will make one for you.');return}show('#o3',true,'Saving and connecting…');try{const r=await withPin(()=>request('/api/save',d));const pinNow=d.control_pin||(r&&r.generated_pin)||'';if(pinNow)sessionStorage.setItem('sunlands-control-pin',pinNow);if(r&&r.generated_pin)showGeneratedPin(r.generated_pin);loadOut=r&&r.generated_pin?'':'#o3';loadFails=0;loadMax=15;setTimeout(load,900)}catch(e){show('#o3',false,e.message)}}
+if(d.charger_connection==='sems'&&(!d.sems_username||(!d.sems_password&&!window.__cfgd)||!d.wallbox_serial)){show('#o3',false,'Enter the GoodWe account and charger serial number.');return}if(d.charger_connection==='modbus'&&!d.charger_host){show('#o3',false,'Enter the charger IP address.');return}const pl=String(d.control_pin||'').length;if(pl>0&&pl<4){show('#o3',false,'A PIN you choose needs at least 4 characters \u2014 or leave it blank and we will make one for you.');return}show('#o3',true,'Saving and connecting…');try{const r=await withPin(()=>request('/api/save',d));const pinNow=d.control_pin||(r&&r.generated_pin)||'';if(pinNow)sessionStorage.setItem('sunlands-control-pin',pinNow);if(r&&r.generated_pin)showGeneratedPin(r.generated_pin);loadOut=r&&r.generated_pin?null:'#o3';loadFails=0;loadMax=15;setTimeout(load,900)}catch(e){show('#o3',false,e.message)}}
 function showGeneratedPin(p){
   /* This is the only time it is ever shown: it is redacted from the status
      API and every control needs it, so a customer who misses it here is
@@ -193,11 +193,12 @@ async function ltRestore(){
   }catch(e){show('#ltOut',false,e.message)}
 }
 async function ltAbandon(){try{await ltStep('abandon')}catch(e){}ltReset()}
-async function load(){if(loadBusy)return;loadBusy=true;clearTimeout(loadTimer);let r;try{const resp=await fetch('/api/status');if(!resp.ok)throw new Error('status '+resp.status);r=await resp.json()}catch(err){loadFails++;loadBusy=false;$('#ver').textContent='offline';$('#ver').className='pill off';const target=$('#status').classList.contains('hidden')?loadOut:'#last';if(loadFails<loadMax){show(target,false,"Can't reach the bridge — retrying…");loadTimer=setTimeout(load,2000)}else{show(target,false,"Can't reach the bridge. Check that SEMS EV CONNECT is still running, then reload this page.")}return}loadBusy=false;loadFails=0;$('#ver').textContent='v'+r.version;$('#ver').className='pill';const prev=$(loadOut);if(prev&&/reach the bridge/.test(prev.textContent))prev.className='out';for(const [k,v] of Object.entries(r.config)){const e=$(`[name=${k}]`);if(!e)continue;if(e.type==='radio')all(`[name=${k}]`).forEach(x=>x.checked=x.value===String(v));else if(e.type==='checkbox')e.checked=!!v;else e.value=v??''}modeChanged();
+async function load(){if(loadBusy)return;loadBusy=true;clearTimeout(loadTimer);let r;try{const resp=await fetch('/api/status',{headers:headers()});if(!resp.ok)throw new Error('status '+resp.status);r=await resp.json()}catch(err){loadFails++;loadBusy=false;$('#ver').textContent='offline';$('#ver').className='pill off';const target=$('#status').classList.contains('hidden')?loadOut:'#last';if(loadFails<loadMax){show(target,false,"Can't reach the bridge — retrying…");loadTimer=setTimeout(load,2000)}else{show(target,false,"Can't reach the bridge. Check that SEMS EV CONNECT is still running, then reload this page.")}return}loadBusy=false;loadFails=0;$('#ver').textContent='v'+r.version;$('#ver').className='pill';const prev=loadOut?$(loadOut):null;if(prev&&/reach the bridge/.test(prev.textContent))prev.className='out';for(const [k,v] of Object.entries(r.config)){const e=$(`[name=${k}]`);if(!e)continue;if(e.type==='radio')all(`[name=${k}]`).forEach(x=>x.checked=x.value===String(v));else if(e.type==='checkbox')e.checked=!!v;else e.value=v??''}modeChanged();
 ['[name=sems_username]','[name=sems_password]'].forEach(sel=>{
   const el=$(sel); if(el)el.addEventListener('blur',maybeAutoFind);
 });
-const pinEl=$('[name=control_pin]'); if(pinEl)pinEl.addEventListener('input',pinRow);window.__cfgd=!!r.config.configured;if(!r.config.configured)return;$('#wizard').classList.add('hidden');$('#status').classList.remove('hidden');const direct=r.config.operating_mode==='modbus';const sems=r.config.charger_connection==='sems';const s=r.snapshot||{};$('#directControls').classList.toggle('hidden',!direct);$('#ocppStatus').classList.toggle('hidden',direct);$('#pOcpp').classList.toggle('hidden',direct);$('#statusTitle').textContent=direct?'Charger control':'OCPP bridge status';let lede;if(direct){lede=r.charger_connected?(sems?'Connected through GoodWe Cloud':`Connected to ${r.config.charger_host}:${r.config.charger_port}`):(sems?'Trying to reach the charger through GoodWe Cloud…':`Trying to reach the charger at ${r.config.charger_host}:${r.config.charger_port}…`)}else{lede=`${r.config.charge_point_id} → ${r.config.ocpp_url}`+(r.charger_connected?'':' · trying to reach the charger…')}if(s.error)lede+=` — ${s.error}`;$('#statusLede').textContent=lede;$('#statusDecision').textContent=r.decision||'Watching the charger — no command in progress';var ltDone=r.first_live_test&&r.first_live_test.passed;$('#semsNotice').classList.toggle('hidden',ltDone||r.config.charger_connection!=='sems');$('#liveTest').classList.toggle('hidden',!r.config.configured);if(ltDone){var d=r.first_live_test.at?new Date(r.first_live_test.at):null;$('#ltVerified').textContent='Verified on your charger'+(d&&!isNaN(d)?' on '+d.toLocaleDateString('en-AU'):'')+'.';if(lt.stage==='idle')lt.stage='done';}$('#ltVerified').classList.toggle('hidden',!ltDone);ltRender();const st=[['Status',s.status_name||'—'],['Power',(s.power_kw??0)+' kW'],['Session',(s.session_kwh??0)+' kWh'],['Lifetime',(s.lifetime_kwh??0)+' kWh'],['Mode',s.mode_name||'—'],['Car',{0:'Unplugged',1:'Half connected',2:'Connected'}[s.car]||'—'],['Max power',(s.max_power_kw??0)+' kW'],['Voltage',(s.volt_a??0)+' V']];$('#stats').innerHTML=st.map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');$('#powerLimit').value=s.max_power_kw||r.config.charger_kw;$('#pCharger').className='pill '+(r.charger_connected?'on':'off');$('#pCharger').textContent=r.charger_connected?(sems?'GoodWe connected':'Charger connected'):'Charger reconnecting';$('#pOcpp').className='pill '+(r.ocpp_connected?'on':'off');$('#pOcpp').textContent=r.ocpp_connected?'OCPP connected':'OCPP reconnecting';$('#pCloud').classList.toggle('hidden',!r.cloud_enabled);if(r.cloud_enabled){$('#pCloud').className='pill '+(r.cloud_ok?'on':'off');$('#pCloud').textContent=r.cloud_ok?'SEMS EV CONNECT linked':'SEMS EV CONNECT reconnecting'}$('#last').className='out show '+(s.error?'bad':'ok');$('#last').textContent=(r.last_action?r.last_action+' · ':'')+(s.error?s.error:(s.faults&&s.faults.length?'Charger notice: '+s.faults.join(', '):'Charger ready'))}
+const pinEl=$('[name=control_pin]');
+if(pinEl){['input','change','blur'].forEach(ev=>pinEl.addEventListener(ev,pinRow));setTimeout(pinRow,300);}window.__cfgd=!!r.config.configured;if(!r.config.configured)return;$('#wizard').classList.add('hidden');$('#status').classList.remove('hidden');const direct=r.config.operating_mode==='modbus';const sems=r.config.charger_connection==='sems';const s=r.snapshot||{};$('#directControls').classList.toggle('hidden',!direct);$('#ocppStatus').classList.toggle('hidden',direct);$('#pOcpp').classList.toggle('hidden',direct);$('#statusTitle').textContent=direct?'Charger control':'OCPP bridge status';let lede;if(direct){lede=r.charger_connected?(sems?'Connected through GoodWe Cloud':`Connected to ${r.config.charger_host}:${r.config.charger_port}`):(sems?'Trying to reach the charger through GoodWe Cloud…':`Trying to reach the charger at ${r.config.charger_host}:${r.config.charger_port}…`)}else{lede=`${r.config.charge_point_id} → ${r.config.ocpp_url}`+(r.charger_connected?'':' · trying to reach the charger…')}if(s.error)lede+=` — ${s.error}`;$('#statusLede').textContent=lede;$('#statusDecision').textContent=r.decision||'Watching the charger — no command in progress';var ltDone=r.first_live_test&&r.first_live_test.passed;$('#semsNotice').classList.toggle('hidden',ltDone||r.config.charger_connection!=='sems');$('#liveTest').classList.toggle('hidden',!r.config.configured);if(ltDone){var d=r.first_live_test.at?new Date(r.first_live_test.at):null;$('#ltVerified').textContent='Verified on your charger'+(d&&!isNaN(d)?' on '+d.toLocaleDateString('en-AU'):'')+'.';if(lt.stage==='idle')lt.stage='done';}$('#ltVerified').classList.toggle('hidden',!ltDone);ltRender();const st=[['Status',s.status_name||'—'],['Power',(s.power_kw??0)+' kW'],['Session',(s.session_kwh??0)+' kWh'],['Lifetime',(s.lifetime_kwh??0)+' kWh'],['Mode',s.mode_name||'—'],['Car',{0:'Unplugged',1:'Half connected',2:'Connected'}[s.car]||'—'],['Max power',(s.max_power_kw??0)+' kW'],['Voltage',(s.volt_a??0)+' V']];$('#stats').innerHTML=st.map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');$('#powerLimit').value=s.max_power_kw||r.config.charger_kw;$('#pCharger').className='pill '+(r.charger_connected?'on':'off');$('#pCharger').textContent=r.charger_connected?(sems?'GoodWe connected':'Charger connected'):'Charger reconnecting';$('#pOcpp').className='pill '+(r.ocpp_connected?'on':'off');$('#pOcpp').textContent=r.ocpp_connected?'OCPP connected':'OCPP reconnecting';$('#pCloud').classList.toggle('hidden',!r.cloud_enabled);if(r.cloud_enabled){$('#pCloud').className='pill '+(r.cloud_ok?'on':'off');$('#pCloud').textContent=r.cloud_ok?'SEMS EV CONNECT linked':'SEMS EV CONNECT reconnecting'}$('#last').className='out show '+(s.error?'bad':'ok');$('#last').textContent=(r.last_action?r.last_action+' · ':'')+(s.error?s.error:(s.faults&&s.faults.length?'Charger notice: '+s.faults.join(', '):'Charger ready'))}
 load();setInterval(()=>{if(!$('#status').classList.contains('hidden'))load()},5000);
 </script></body></html>"""
 
@@ -256,7 +257,11 @@ def build_app(cfg: C.Config, state, restart_cb, control_cb) -> web.Application:
     PIN_LOCK_AFTER = 5
     PIN_LOCK_SECONDS = 30.0
 
-    async def pin_ok(req: web.Request) -> bool:
+    async def pin_ok(req: web.Request, *, count: bool = True) -> bool:
+        """count=False for polling. The status page asks every few seconds
+        whether it may see identifying fields; treating each of those as a
+        failed PIN attempt burned the lockout budget and then rejected the
+        correct PIN."""
         supplied = req.headers.get("X-Sunlands-PIN", "")
         now = time.monotonic()
         if now < pin_failures["until"]:
@@ -270,6 +275,8 @@ def build_app(cfg: C.Config, state, restart_cb, control_cb) -> web.Application:
         if ok:
             pin_failures["count"] = 0
             pin_failures["until"] = 0.0
+        elif not count:
+            return False
         else:
             pin_failures["count"] += 1
             if pin_failures["count"] >= PIN_LOCK_AFTER:
@@ -296,7 +303,7 @@ def build_app(cfg: C.Config, state, restart_cb, control_cb) -> web.Application:
         # identifying details - the GoodWe login, the charger serial, the
         # charger's own identity - are held back until the PIN is presented.
         # Live status still shows, so the page works for the household.
-        trusted = (not cfg.control_pin) or await pin_ok(req)
+        trusted = (not cfg.control_pin) or await pin_ok(req, count=False)
         cfgview = public_config()
         if not trusted:
             for k in ("sems_username", "wallbox_serial", "charger_host", "cloud_url",
@@ -490,7 +497,14 @@ def build_app(cfg: C.Config, state, restart_cb, control_cb) -> web.Application:
         if draft.operating_mode == "ocpp" and not draft.ocpp_url.startswith(("ws://", "wss://")):
             return web.json_response({"error": "OCPP URL must start with ws:// or wss://"}, status=400)
         pairing = str(data.get("cloud_pairing", "")).strip()
-        if pairing and not C.apply_pairing_input(draft, pairing):
+        # apply_pairing_input makes a blocking HTTPS call. Run off the loop,
+        # or status, charger polling, cloud sync and the OCPP heartbeat all
+        # stall for as long as the network takes - up to twenty seconds.
+        claimed = True
+        if pairing:
+            claimed = await asyncio.get_running_loop().run_in_executor(
+                None, C.apply_pairing_input, draft, pairing)
+        if pairing and not claimed:
             return web.json_response(
                 {"error": "that pairing code was not recognised. Check it against the message "
                           "from your installer — codes are single-use and expire, so if it has "
