@@ -121,7 +121,15 @@ function setSerial(v){const f=$('[name=wallbox_serial]');if(f)f.value=v}
 async function saveConfig(){const d=form();
   const p1=String(d.control_pin||''),p2=String(d.control_pin_confirm||'');delete d.control_pin_confirm;
   if(p1&&p1!==p2){show('#o3',false,'The two PINs do not match. Type the same one in both boxes.');return}
-if(d.charger_connection==='sems'&&(!d.sems_username||(!d.sems_password&&!window.__cfgd)||!d.wallbox_serial)){show('#o3',false,'Enter the GoodWe account and charger serial number.');return}if(d.charger_connection==='modbus'&&!d.charger_host){show('#o3',false,'Enter the charger IP address.');return}const pl=String(d.control_pin||'').length;if((pl>0&&pl<4)||(pl===0&&!window.__cfgd)){show('#o3',false,'Choose a local control PIN with at least 4 characters.');return}show('#o3',true,'Saving and connecting…');try{await withPin(()=>request('/api/save',d));if(d.control_pin)sessionStorage.setItem('sunlands-control-pin',d.control_pin);loadOut='#o3';loadFails=0;loadMax=15;setTimeout(load,900)}catch(e){show('#o3',false,e.message)}}
+if(d.charger_connection==='sems'&&(!d.sems_username||(!d.sems_password&&!window.__cfgd)||!d.wallbox_serial)){show('#o3',false,'Enter the GoodWe account and charger serial number.');return}if(d.charger_connection==='modbus'&&!d.charger_host){show('#o3',false,'Enter the charger IP address.');return}const pl=String(d.control_pin||'').length;if(pl>0&&pl<4){show('#o3',false,'A PIN you choose needs at least 4 characters \u2014 or leave it blank and we will make one for you.');return}show('#o3',true,'Saving and connecting…');try{const r=await withPin(()=>request('/api/save',d));const pinNow=d.control_pin||(r&&r.generated_pin)||'';if(pinNow)sessionStorage.setItem('sunlands-control-pin',pinNow);if(r&&r.generated_pin)showGeneratedPin(r.generated_pin);loadOut=r&&r.generated_pin?'':'#o3';loadFails=0;loadMax=15;setTimeout(load,900)}catch(e){show('#o3',false,e.message)}}
+function showGeneratedPin(p){
+  /* This is the only time it is ever shown: it is redacted from the status
+     API and every control needs it, so a customer who misses it here is
+     locked out of their own charger. Deliberately not a toast. */
+  const box=$('#o3');
+  box.className='out show ok';
+  box.innerHTML='<b>Your control PIN is '+p+'</b><br>Write it down now \u2014 it is not shown again, and you need it to change these settings or use the controls on this page. It is already saved on this device, so charging works straight away.';
+}
 async function control(action,value){if(!pin()){const p=prompt('Enter the local control PIN');if(!p)return;sessionStorage.setItem('sunlands-control-pin',p)}try{await request('/api/control',{action,value});await load()}catch(e){if(/PIN/i.test(e.message))sessionStorage.removeItem('sunlands-control-pin');alert(e.message)}}
 function reconfig(){if(!pin()){const p=prompt('Enter the current local control PIN');if(!p)return;sessionStorage.setItem('sunlands-control-pin',p)}$('#status').classList.add('hidden');$('#wizard').classList.remove('hidden')}
 let loadBusy=false,loadFails=0,loadMax=5,loadTimer=null,loadOut='#o1';
@@ -494,7 +502,13 @@ def build_app(cfg: C.Config, state, restart_cb, control_cb) -> web.Application:
         await restart_cb()
         if generated_pin:
             state.trace("A control PIN was generated for this bridge")
-        return web.json_response({"ok": True, "mode": cfg.operating_mode})
+        # Returned once, and only when we invented it: it is redacted from
+        # /api/status, and every control needs it, so if the customer never
+        # sees it they are locked out of their own charger.
+        out = {"ok": True, "mode": cfg.operating_mode}
+        if generated_pin:
+            out["generated_pin"] = generated_pin
+        return web.json_response(out)
 
     async def control(req: web.Request):
         if not await pin_ok(req):

@@ -16,14 +16,14 @@ Assistant, and exposes start, stop, charge mode and a power limit.
 4. **Start**, then switch on **Start on boot** and **Watchdog**
 5. **Open Web UI** and follow the guided setup
 
-Full setup notes are in [`sems-ev-connect/README.md`](sems-ev-connect/README.md),
-which is also what the add-on's Documentation tab shows.
+Full setup notes are in [`sems-ev-connect/DOCS.md`](sems-ev-connect/DOCS.md), which is
+also what the add-on's Documentation tab shows inside Home Assistant.
 
 ## What it needs
 
-The owner's GoodWe account email and password (it signs in as them; nothing is
-shared onward), and a control PIN they choose, which protects the charging
-controls on their home network.
+The owner's GoodWe account email and password — it signs in as them, and nothing is
+shared onward. A control PIN protects the charging controls on their home network;
+they can pick one, or leave it blank and have one generated.
 
 The charger's serial number is **not** something they have to go and find — the
 setup page has a **Find my charger** button that lists the chargers on the

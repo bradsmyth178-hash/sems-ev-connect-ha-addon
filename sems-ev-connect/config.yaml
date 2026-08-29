@@ -2,7 +2,7 @@ name: SEMS EV CONNECT
 version: "0.6.0"
 slug: sunlands_ev_bridge
 description: GoodWe HCA home control and OCPP 1.6J connectivity with guided setup
-url: https://goodwe-evcharger-ha-setup-wizard.netlify.app/
+url: https://goodwe-evcharger-ha-setup-wizard.netlify.app/connect
 # See build.yaml: only architectures with musl wheels for every dependency.
 arch: [aarch64, amd64]
 startup: services
