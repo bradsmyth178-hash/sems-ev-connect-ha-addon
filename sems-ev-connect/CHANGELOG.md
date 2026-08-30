@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0
+## 0.6.1
 
 - Pairing is now an eight-character code instead of a long block of text. It is
   single-use and expires after seven days.
